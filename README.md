@@ -1,40 +1,43 @@
 # CodeAnalyst
-A development tool that helps FoxPro developers identify areas of code that should or could be refactored.
 
-Code Analyst is extensible, allowing developers to create their own refactoring rules and then enable or disable them as needed. Some of the code was based on the Code References tool.
+本文档由 xinjie 于 2020-10-03 翻译
 
-Rules can be associated with different aspects of code. For example, an Object rule might analyse all objects on a form to ensure they are using a naming convention.
+这是一个帮助 FoxPro 开发人员确定应该（或可以）对特定代码区域进行重构的开发工具。
 
-You can select to analyze an individual file, the current project or a directory (and subdirectories).
+Code Analyst 自身是可扩展的，它允许开发人员创建自己的重构规则，然后根据需要启用或禁用它们。部分代码基于 Code References 工具。
 
-#### Default Refactoring Rules
+规则可用于与代码相关的各个方面。例如，对象规则可能会拆分所要分析的表单上的所有对象，以确保它们都使用了规则所限的命名规则。
 
-There are four different types of rules:
-* File
-* Method/Function
-* Object
-* Line
+你也可以选择分析单一的文件、当前项目、特定目录（和子目录）。
 
-Note that each rule may be disabled if you don't want to use it.
+#### 默认的重构规则
 
-#### Default Method Rules
+工具自身具有四种类型的规则：
+* 文件
+* 方法/函数
+* 对象
+* 行
 
-* Check if there is an unreasonable ratio of comments to code in a method
-* Check to see if there is a RETURN within a WITH statement, a known cause of C5 errors
-* Check to see if there are too many lines in a method (defaults to 150) - which is a sign of readability
-* Check to see if you have more than a certain number of loop structures in code (defaults to 5)
-* Verifies that each function has a RETURN value
-* Verifies that a function doesn't have more than 3 return values
+请注意，如果你不想使用它们，你可以根据需要禁用它们。
 
-#### Default Object Rules
+#### 默认的方法规则
 
-* Checks if a button named Cancel does not have the Cancel property set to .T.
-* Checks if you are simply using the default object names
-* Checks if there are methods in the object that have similar number of lines that could therefore be a good candidate for refactoring the code
-* Checks if you are using THIS.Parent in a form already
-* Checks if you are using duplicate methods in column headers which suggest a possible refactoring use for BindEvent.
+* 检查方法代码中注释和代码的比例是否合适。
+* 检查 With 结构中是否存在 Return 语句，这是一个已知的造成 C5 错误的原因。
+* 检查方法代码中的行数是否过多（默认150行），此规则用于提高代码的可读性。
+* 检查代码中循环结构的数量（默认值：5）。
+* 验证每个方法中是否具有返回值。
+* 验证方法的返回值是否超过 3 个。
 
-#### Default Line Rules
+#### 默认的对象规则
 
-* Warns if you are using CTOD on a line of code instead of the DATE() function
-* Checks if you have more than 3 .Parent lines on the same line, suggesting possible too many uses of .Parent
+* 检查“取消”按钮的 Cancel 属性值是否为 .T. 。
+* 检查对象名是否使用了默认值。
+* 检查对象的方法中是否存在相似的行数（如果存在，则需要考虑是否应该进行重构）。
+* 检查代码中是否使用 This.Parent 来表示表单。
+* 检查 Grid 的 header 是否使用重复的方法，这暗示你或许需要对 BindEvent 进行重构。
+
+#### 默认行规则
+
+* 如果你在一行代码中使用 CTOD（） 函数而不是 DATE（） 函数则会发出警告。
+* 检查同一行代码中 .Parent 的数量是否多于 3 个，这表明你可能使用了过多的 .Parent 。
