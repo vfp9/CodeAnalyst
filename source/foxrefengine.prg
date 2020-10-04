@@ -1,7 +1,7 @@
-* Abstract...:
-*	Primary class for Code References application.
+* 摘要...：
+* Code References 应用程序的主要类。
 *
-* Changes....:
+* 更新....：
 *
 #include "foxpro.h"
 #include "foxref.h"
@@ -16,13 +16,13 @@ DEFINE CLASS FoxRef AS Session
 
 	Name = "FoxRef"
 
-	* search match engines
+	* 搜索匹配引擎
 	MatchClass		   = "MatchDefault"
 	MatchClassLib      = "foxmatch.prg"
 	WildMatchClass     = "MatchWildcard"
 	WildMatchClassLib  = "foxmatch.prg"
 
-	* default search engine for Open Window
+	* 打开表单的默认搜索引擎
 	FindWindowClass    = "RefSearchWindow"
 	FindWindowClassLib = "FoxRefSearch_Window.prg"
 
@@ -37,12 +37,12 @@ DEFINE CLASS FoxRef AS Session
 	Comments        = COMMENTS_INCLUDE
 	MatchCase       = .F.
 	WholeWordsOnly  = .F.
-	ProjectHomeDir  = .F.  && True to search only files in Project's Home Directory or below
+	ProjectHomeDir  = .F.  && True，仅搜索Project主目录或以下目录中的文件
 
 	SubFolders      = .F.
 	Wildcards       = .F.
-	Quiet           = .F.  && quiet mode -- don't display search progress
-	ShowProgress    = .T.  && show a progress form
+	Quiet           = .F.  && 安静模式-不显示搜索进度
+	ShowProgress    = .T.  && 显示进度
 
 	Errors          = .NULL.
 
@@ -51,7 +51,7 @@ DEFINE CLASS FoxRef AS Session
 	
 	XSLTemplate     = "foxref.xsl"
 
-	* MRU array lists
+	* MRU 数组列表
 	DIMENSION aLookForMRU[10]
 	DIMENSION aReplaceMRU[10]
 	DIMENSION aFolderMRU[10]
@@ -65,10 +65,10 @@ DEFINE CLASS FoxRef AS Session
 
 	Pattern             = ''
 	OverwritePrior      = .T.
-	ConfirmReplace      = .T.  && confirm each replacement
-	BackupOnReplace     = .T.  && false to not backup when doing global replace
-	DisplayReplaceLog   = .T.  && create activity log for replacements
-	PreserveCase        = .F.  && preserve case during a Replace operation
+	ConfirmReplace      = .T.  && 确认每次更换
+	BackupOnReplace     = .T.  && false 进行全局替换时不备份
+	DisplayReplaceLog   = .T.  && 创建替换活动日志
+	PreserveCase        = .F.  && 在替换操作期间保留大小写
 
 	FoxRefDirectory = ''
 	RefTable        = ''
@@ -80,12 +80,12 @@ DEFINE CLASS FoxRef AS Session
 		
 	ActivityLog     = ''
 	
-	* The following are set by the Options dialog
-	* There should be a corresponding entry in FoxRefOption.DBF
-	* (except for BackupStyle & FontString)
-	IncludeDefTable     = .T.  && create Definition table when searching
-	CodeOnly            = .F.  && search only source code & expressions (not names and other none-code items)
-	FormProperties      = .T.  && search form/class property names & values
+	* 以下是通过选项对话框设置的
+	* FoxRefOption.DBF 中应该有对应的记录
+	* (BackupStyle & FontString 除外)
+	IncludeDefTable     = .T.  && 搜索时创建定义表
+	CodeOnly            = .F.  && 仅搜索源代码和表达式（不搜索名称和其他非代码项）
+	FormProperties      = .T.  && 搜索表单/类的属性名称和值
 	AutoProjectHomeDir  = .F.  && True to search only files in Project's Home Directory or below when doing definitions automatically
 	ShowRefsPerLine     = .F.  && display a column in search results that depicts number of references found on the line
 	ShowFileTypeHistory	= .F.  && True to keep filetype history in addition to showing common filetypes in search dialog

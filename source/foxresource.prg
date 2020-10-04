@@ -1,6 +1,5 @@
-* Abstract:
-*   Class for add/retrieving values
-*	from FoxUser resource file.
+* 摘要：
+* 从FoxUser资源文件添加/检索值的类。
 *
 
 DEFINE CLASS FoxResource AS Custom
@@ -16,18 +15,18 @@ DEFINE CLASS FoxResource AS Custom
 		THIS.ResourceFile = SYS(2005)
 	ENDPROC
 
-	* Clear out all options
+	* 清除所有选项
 	FUNCTION Clear()
 		THIS.oCollection.Remove(-1)
 	ENDFUNC
 	
 	FUNCTION Set(cOption, xValue)
-		* remove if already exists
+		* 移除已存在的
 		IF THIS.OptionExists(m.cOption)
 			THIS.oCollection.Remove(UPPER(m.cOption))
 		ENDIF
 
-		* Add back in
+		* 重新增加
 		RETURN THIS.oCollection.Add(m.xValue, UPPER(m.cOption))
 	ENDFUNC
 	
@@ -191,7 +190,7 @@ DEFINE CLASS FoxResource AS Custom
 		RETURN m.cData
 	ENDFUNC
 
-	* save to a specific fieldname
+	* 保存到特定的字段
 	FUNCTION SaveTo(cField, cAlias)
 		LOCAL i
 		LOCAL nSelect

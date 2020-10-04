@@ -1,251 +1,268 @@
-LPARAMETERS tcFile,tlSilent
+Lparameters tcFile,tlSilent
 
-IF PCOUNT()=1
-	tlSilent = .F.
-ENDIF
+If Pcount() = 1
+	m.tlSilent = .F.
+Endif
 
-IF PCOUNT()=0
-	tcFile = ""
-ENDIF
-EXTERNAL ARRAY taArray
-LOCAL llRunning
-llRunning = PEMSTATUS(_SCREEN,"_Analyst",5)
+If Pcount() = 0
+	m.tcFile = ""
+Endif
 
-IF NOT llRunning
-	*- Determine if it's in fact an app running. Dont rely on the app being in the HOME()
-	IF UPPER(JUSTEXT(SYS(16))) = "APP" THEN
-		_SCREEN.NEWOBJECT("_Analyst","_codeAnalyzer","MAIN.PRG",SYS(16))
-	ELSE
-		_SCREEN.NEWOBJECT("_analyst","_codeAnalyzer","MAIN.PRG")
-	ENDIF
-	llRunning = .T.
-ENDIF
-_SCREEN._Analyst.IsDirectory = .F.
-_SCREEN._Analyst.cdirectory = ""
-IF UPPER(tcFile)="DIRECTORY"
-	IF DIRECTORY(tlSilent)
-	_SCREEN._Analyst.IsDirectory = .T.
-	_SCREEN._Analyst.cDirectory = tlSilent
-	 _SCREEN._Analyst.BuildFakeProject(tlSilent)
-	 tcFile = _SCREEN._Analyst.cFile
-	 tlSilent = .T.
-	 ELSE
-	 MESSAGEBOX("Directory " + tlSilent + " does not exist",0+16,"Code Analyst")
-	 tlSilent = .F.
-	 tcFile = ""
-	 
-	ENDIF
-ENDIF
-IF tlSilent
-	_SCREEN._Analyst.lProjectRun = .T.
-ENDIF
-*- Check for a parameter passed. If none is passed, the analyst is just installed in the menu
-*- If the analyst was already installed, start the Analyze anyway.
+External Array taArray
 
+Local llRunning
 
-IF PCOUNT()>0 AND UPPER(tcFile)="-CONFIG"
-	_SCREEN._Analyst.Configure()
-ELSE
-	IF PCOUNT() = 1 OR llRunning THEN
-		_SCREEN._Analyst.Analyze(tcFile)
-	ENDIF
-ENDIF
+m.llRunning = Pemstatus(_Screen, "_Analyst", 5)
 
-DEFINE CLASS _codeAnalyzer AS CUSTOM
-	cFile = ""
-	csetesc = ""
-	csetesclabel = ""
-	cMainProgram = ""
-	cHomeDir = ""
-	isdirectory = .F.
-	cDirectory = ""
-	lLineRules = .F.
-	cLine = ""
-	nLine = 0
-	cFuncName = ""
-	oTherm = .NULL.
-	oObject = .NULL.
-	cObject= ""
-	cCode = ""
-	cFontString = "Tahoma,8,N"
-	cError = ""
-	cHomeDir = ""
-	cRuleDir = ""
-	cResetFile = ""
-	cAnalysisCursor = ""
-	nFuncLines = 0
-	cWarningID = ""
-	nFileLines = 0
-	cMessage = ""
-	lDisplayMessage = .T.
-	lDisplayForm = .T.
-	lUseDefaultDir = .T.
-	lProjectRun = .F.
-	cTable = ""
-	cClassName = ""
+If Not m.llRunning
+	*- 确定它是否实际上是一个正在运行的应用程序。 不要依赖应用程序位于HOME（）中
+	If Upper(Justext(Sys(16))) = "APP" Then
+		_Screen.Newobject("_Analyst", "_codeAnalyzer", "MAIN.PRG", Sys(16))
 
+	Else
+		_Screen.Newobject("_analyst", "_codeAnalyzer", "MAIN.PRG")
+	Endif
 
-	PROCEDURE RESET
-		IF NOT EMPTY(THIS.cAnalysisCursor)
-			IF USED(THIS.cAnalysisCursor)
-				LOCAL lc
-				lc = SET("SAFETY")
-				SET SAFETY OFF
-				ZAP IN (THIS.cAnalysisCursor)
-				SET SAFETY &lc
-			ENDIF
-		ENDIF
-	ENDPROC
+	m.llRunning = .T.
+EndIf
 
-	PROCEDURE SetPrefs
-		LOCAL nSelect
-		LOCAL lcRes
-		lcRes = "ANALYST"
-		LOCAL lSuccess
-		LOCAL nMemoWidth
-		LOCAL nCnt
-		LOCAL cData
+With _Screen._Analyst
+	.IsDirectory	= .F.
+	.cdirectory		= ""
+EndWith 
 
-		_AnalystResetXML = THIS.cResetFile
-		_AnalystFontString       = THIS.cFontString
-		_Analysthomedir          = THIS.cHomeDir
-		_AnalystRuledir          = THIS.cRuleDir
-		IF THIS.lUseDefaultDir
-			_AnalystRuledir = ""
-		ENDIF
-
-		nSelect = SELECT()
-
-		lSuccess = .F.
-
-		* make sure Resource file exists and is not read-only
-		nCnt = ADIR(aFileList, SYS(2005))
-		IF nCnt > 0 AND ATC('R', aFileList[1, 5]) == 0
-			USE (SYS(2005)) IN SELECT("FOXRESOURCE") SHARED AGAIN ALIAS FoxResource
-			IF USED("FoxResource") AND !ISREADONLY("FoxResource")
-				nMemoWidth = SET('MEMOWIDTH')
-				SET MEMOWIDTH TO 255
-
-				SELECT FoxResource
-				LOCATE FOR UPPER(ALLTRIM(TYPE)) == "PREFW" AND UPPER(ALLTRIM(ID)) == lcRes AND EMPTY(NAME)
-				IF !FOUND()
-					APPEND BLANK IN FoxResource
-					REPLACE ;
-						TYPE WITH "PREFW", ;
-						ID WITH lcRes, ;
-						READONLY WITH .F. ;
-						IN FoxResource
-				ENDIF
-
-				IF !FoxResource.READONLY
-
-					SAVE TO MEMO DATA ALL LIKE _Analyst*
-
-					REPLACE ;
-						UPDATED WITH DATE(), ;
-						ckval WITH VAL(SYS(2007, FoxResource.DATA)) ;
-						IN FoxResource
-
-					lSuccess = .T.
-				ENDIF
-				SET MEMOWIDTH TO (nMemoWidth)
-
-				USE IN FoxResource
-			ENDIF
-		ENDIF
-
-		SELECT (nSelect)
-
-		RETURN lSuccess
-
-	ENDPROC
-
-	PROCEDURE GetPrefs
-		LOCAL nSelect
-		LOCAL lcRes
-		lcRes = "ANALYST"
-		LOCAL lSuccess
-		LOCAL nMemoWidth
-
-
-		nSelect = SELECT()
-
-		lSuccess = .F.
-		IF EMPTY(This.cRuleDir)
-			This.cRuleDir = HOME()
-		ENDIF
-
-		IF FILE(SYS(2005))    && resource file not found.
-			USE (SYS(2005)) IN SELECT("FOXRESOURCE") SHARED AGAIN ALIAS FoxResource
-			IF USED("FoxResource")
-				nMemoWidth = SET('MEMOWIDTH')
-				SET MEMOWIDTH TO 255
-
-				SELECT FoxResource
-				LOCATE FOR UPPER(ALLTRIM(TYPE)) == "PREFW" ;
-					AND UPPER(ALLTRIM(ID)) == lcRes ;
-					AND !DELETED()
-
-				IF FOUND() AND !EMPTY(DATA) AND ckval == VAL(SYS(2007, DATA)) AND EMPTY(NAME)
-					RESTORE FROM MEMO DATA ADDITIVE
-
-					THIS.cFontString = _AnalystFontString
-					IF TYPE("_ANALYSTRuleDIR")="C"
-						IF NOT EMPTY(_AnalystRuledir)
-							THIS.lUseDefaultDir = .F.
-							THIS.cRuleDir = _AnalystRuledir
-						ELSE
-							THIS.lUseDefaultDir = .T.
-							THIS.cRuleDir = CURDIR()
-						ENDIF
-					ELSE
-						THIS.lUseDefaultDir = .T.
-						THIS.cRuleDir = CURDIR()
-					ENDIF
-					IF TYPE("_ANALYSTHomeDIR")="C"
-						IF NOT EMPTY(_Analysthomedir)
-						ELSE
-							THIS.cHomeDir = CURDIR()
-						ENDIF
-					ELSE
-						THIS.cHomeDir = CURDIR()
-					ENDIF
-
-
-
-					IF TYPE("_AnalystResetXML")="C"
-						IF NOT EMPTY(_AnalystResetXML)
-							THIS.cResetFile = _AnalystResetXML
-						ELSE
-							THIS.cResetFile = ""
-						ENDIF
-					ELSE
-						THIS.cResetFile = ""
-					ENDIF
-
-
-					lSuccess = .T.
-				ENDIF
-
-				SET MEMOWIDTH TO (nMemoWidth)
-
-				USE IN FoxResource
-			ENDIF
+If Upper(m.tcFile) = "DIRECTORY"
+	If Directory(m.tlSilent)
+		With _Screen._Analyst
+			.IsDirectory	= .T.
+			.cDirectory		= m.tlSilent
+			
+			.BuildFakeProject(m.tlSilent)
+		EndWith 
 		
-		ENDIF
+		m.tcFile = _Screen._Analyst.cFile
+		m.tlSilent = .T.
 
-		SELECT (nSelect)
+	Else
+		Messagebox("目录 " + m.tlSilent + " 不存在。", 0 + 16, "代码分析")
+		m.tlSilent	= .F.
+		m.tcFile	= ""
+	Endif
+Endif
 
-		RETURN lSuccess
+If m.tlSilent
+	_Screen._Analyst.lProjectRun = .T.
+Endif
+*-检查是否传递了参数。 如果没有通过，则分析器仅安装在菜单中
+*-如果已经安装了分析器，则无论如何都要启动分析。
 
-	ENDPROC
-	PROCEDURE CreateRuleTable
+If Pcount() > 0 And Upper(m.tcFile)="-CONFIG"
+	_Screen._Analyst.Configure()
 
-		IF NOT FILE(THIS.cRuleDir+"CODERULE.DBF")
-			LOCAL lnArea
-			lnArea = SELECT()
-			SELECT 0
-			CREATE TABLE (THIS.cRuleDir+"CODERULE.DBF") (;
+Else
+	If Pcount() = 1 Or m.llRunning Then
+		_Screen._Analyst.Analyze(m.tcFile)
+	Endif
+Endif
+
+Define Class _codeAnalyzer As Custom
+	cFile			= ""
+	csetesc			= ""
+	csetesclabel	= ""
+	cMainProgram	= ""
+	cHomeDir		= ""
+	isdirectory		= .F.
+	cDirectory		= ""
+	lLineRules		= .F.
+	cLine			= ""
+	nLine			= 0
+	cFuncName		= ""
+	oTherm			= .NULL.
+	oObject			= .NULL.
+	cObject			= ""
+	cCode			= ""
+	cFontString		= "Tahoma,8,N"
+	cError			= ""
+	cHomeDir		= ""
+	cRuleDir		= ""
+	cResetFile		= ""
+	cAnalysisCursor	= ""
+	nFuncLines		= 0
+	cWarningID		= ""
+	nFileLines		= 0
+	cMessage		= ""
+	lDisplayMessage	= .T.
+	lDisplayForm	= .T.
+	lUseDefaultDir	= .T.
+	lProjectRun		= .F.
+	cTable			= ""
+	cClassName		= ""
+
+
+	Procedure Reset
+		If Not Empty(This.cAnalysisCursor)
+			If Used(This.cAnalysisCursor)
+				Local lc
+				lc = Set("SAFETY")
+				Set Safety Off
+				Zap In (This.cAnalysisCursor)
+				Set Safety &lc
+			Endif
+		Endif
+	Endproc
+
+	Procedure SetPrefs
+		Local nSelect
+		Local lcRes
+		m.lcRes = "ANALYST"
+		Local lSuccess
+		Local nMemoWidth
+		Local nCnt
+		Local cData
+
+		_AnalystResetXML		= This.cResetFile
+		_AnalystFontString		= This.cFontString
+		_Analysthomedir			= This.cHomeDir
+		_AnalystRuledir			= This.cRuleDir
+
+		If This.lUseDefaultDir
+			_AnalystRuledir = ""
+		Endif
+
+		m.nSelect = Select()
+
+		m.lSuccess = .F.
+
+		* 确保资源文件存在并且不是只读的
+		m.nCnt = Adir(aFileList, Sys(2005))
+
+		If m.nCnt > 0 And Atc('R', aFileList[1, 5]) == 0
+			Use (Sys(2005)) In Select("FOXRESOURCE") Shared Again Alias FoxResource
+
+			If Used("FoxResource") And !Isreadonly("FoxResource")
+				m.nMemoWidth = Set('MEMOWIDTH')
+				Set Memowidth To 255
+
+				Select FoxResource
+				Locate For Upper(Alltrim(Type)) == "PREFW" And Upper(Alltrim(Id)) == lcRes And Empty(Name)
+
+				If !Found()
+					Append Blank In FoxResource
+					Replace In FoxResource;
+						TYPE		With "PREFW", ;
+						ID			With m.lcRes, ;
+						READONLY	With .F. ;
+						
+				Endif
+
+				If !FoxResource.ReadOnly
+					Save To Memo Data All Like _Analyst*
+
+					Replace IN FoxResource;
+						UPDATED		With Date(), ;
+						ckval		With Val(Sys(2007, FoxResource.Data)) ;
+						
+					m.lSuccess = .T.
+				Endif
+
+				Set Memowidth To (nMemoWidth)
+				Use In FoxResource
+			Endif
+		Endif
+
+		Select (m.nSelect)
+
+		Return m.lSuccess
+	Endproc
+
+	Procedure GetPrefs
+		Local nSelect
+		Local lcRes
+		m.lcRes = "ANALYST"
+		Local lSuccess
+		Local nMemoWidth
+
+		m.nSelect = Select()
+
+		m.lSuccess = .F.
+
+		If Empty(This.cRuleDir)
+			This.cRuleDir = Home()
+		Endif
+
+		If File(Sys(2005))    && resource file not found.
+			Use (Sys(2005)) In Select("FOXRESOURCE") Shared Again Alias FoxResource
+
+			If Used("FoxResource")
+				m.nMemoWidth = Set('MEMOWIDTH')
+				Set Memowidth To 255
+
+				Select FoxResource
+				Locate For Upper(Alltrim(Type)) == "PREFW" AND Upper(Alltrim(Id)) == m.lcRes AND !Deleted()
+
+				If Found() And !Empty(Data) And ckval == Val(Sys(2007, Data)) And Empty(Name)
+					Restore From Memo Data Additive
+
+					This.cFontString = m._AnalystFontString
+
+					If Type("_ANALYSTRuleDIR") = "C"
+						If Not Empty(m._AnalystRuledir)
+							This.lUseDefaultDir	= .F.
+							This.cRuleDir		= m._AnalystRuledir
+
+						Else
+							This.lUseDefaultDir	= .T.
+							This.cRuleDir		= Curdir()
+						Endif
+
+					Else
+						This.lUseDefaultDir	= .T.
+						This.cRuleDir		= Curdir()
+					Endif
+
+					If Type("_ANALYSTHomeDIR") = "C"
+						If Not Empty(m._Analysthomedir)
+						Else
+							This.cHomeDir = Curdir()
+						Endif
+
+					Else
+						This.cHomeDir = Curdir()
+					Endif
+
+					If Type("_AnalystResetXML") = "C"
+						If Not Empty(m._AnalystResetXML)
+							This.cResetFile = m._AnalystResetXML
+						Else
+							This.cResetFile = ""
+						Endif
+					Else
+						This.cResetFile = ""
+					Endif
+
+
+					m.lSuccess = .T.
+				Endif
+
+				Set Memowidth To (nMemoWidth)
+
+				Use In FoxResource
+			Endif
+		Endif
+
+		Select (m.nSelect)
+
+		Return m.lSuccess
+	Endproc
+
+	Procedure CreateRuleTable
+		If Not File(This.cRuleDir + "CODERULE.DBF")
+			Local lnArea
+			m.lnArea = Select()
+
+			Select 0
+
+			Create Table (This.cRuleDir+"CODERULE.DBF") (;
 				TYPE C(1),;
 				NAME C(30),;
 				ACTIVE L,;
@@ -258,158 +275,177 @@ DEFINE CLASS _codeAnalyzer AS CUSTOM
 				UniqueID C(10);
 				)
 
-			IF NOT USED("_CODERULE")
-				USE _CODERULE IN 0
-			ENDIF
+			If Not Used("_CODERULE")
+				Use _CODERULE In 0
+			Endif
 
-			SELECT _CODERULE
-			SCAN
-				SCATTER MEMVAR MEMO
-				INSERT INTO (THIS.cRuleDir+"CODERULE") FROM MEMVAR
-			ENDSCAN
-			USE IN SELECT("_CODERULE")
+			Select _CODERULE
+			Scan
+				Scatter Memvar Memo
+				Insert Into (This.cRuleDir+"CODERULE") From Memvar
+			Endscan
+			Use In Select("_CODERULE")
+		Endif
+	Endproc
 
-		ENDIF
+	Procedure Destroy
+		If Not Isnull(This.oTherm)
+			This.oTherm.Hide()
+			This.oTherm.Release()
+		Endif
+		If Not Empty(Prmbar("_MTOOLS", 5942)) Then
+			Release Bar 5942 Of _MTOOLS
+		Endif
+	Endproc
 
-	ENDPROC
+	Procedure Configure
+		Local lnArea
+		m.lnArea = Select()
 
-	PROCEDURE DESTROY
-		IF NOT ISNULL(THIS.oTherm)
-			THIS.oTherm.HIDE()
-			THIS.oTherm.RELEASE()
-		ENDIF
-		IF NOT EMPTY(PRMBAR("_MTOOLS", 5942)) THEN
-			RELEASE BAR 5942 OF _MTOOLS
-		ENDIF
-	ENDPROC
-
-	PROCEDURE Configure
-		LOCAL lnArea
-		lnArea = SELECT()
-		IF NOT USED("CODERULE")
+		If Not Used("CODERULE")
 			*- Use the cHomeDir property here... again don't rely on the HOME()
-			USE (THIS.cRuleDir+"CODERULE") IN 0
-		ENDIF
-		DO FORM ConfigureAnalyst
-		SELECT (lnArea)
-	ENDPROC
-	PROCEDURE AddWarning
-		LPARAMETERS tcWarning,tcType
-		IF NOT EMPTY(THIS.aWarnings(1,1))
-			DIMENSION THIS.aWarnings(ALEN(THIS.aWarnings,1)+1,3)
-		ENDIF
-		DIMENSION THIS.aWarnings(ALEN(THIS.aWarnings,1),3)
-		THIS.aWarnings(ALEN(THIS.aWarnings,1),1)=tcWarning
-		IF EMPTY(THIS.cFile)
-			THIS.cFile = "Unknown"
-		ENDIF
-		THIS.aWarnings(ALEN(THIS.aWarnings,1),2)=THIS.cFile
-		THIS.aWarnings(ALEN(THIS.aWarnings,1),3)=THIS.cWarningID
-		IF USED(THIS.cAnalysisCursor)
-			LOCAL lnArea
-			lnArea = SELECT()
-			SELECT (THIS.cAnalysisCursor)
-			THIS.AddWarningCursor(tcWarning)
+			Use (This.cRuleDir+"CODERULE") In 0
+		Endif
+
+		Do Form ConfigureAnalyst
+		Select (m.lnArea)
+	Endproc
+
+	Procedure AddWarning
+		Lparameters tcWarning,tcType
+		If Not Empty(This.aWarnings(1, 1))
+			Dimension This.aWarnings(Alen(This.aWarnings, 1) + 1, 3)
+		Endif
+
+		Dimension This.aWarnings(Alen(This.aWarnings, 1), 3)
+
+		This.aWarnings(Alen(This.aWarnings, 1), 1) = m.tcWarning
+
+		If Empty(This.cFile)
+			This.cFile = "未知"
+		Endif
+
+		This.aWarnings(Alen(This.aWarnings, 1), 2) = This.cFile
+		This.aWarnings(Alen(This.aWarnings, 1), 3) = This.cWarningID
+
+		If Used(This.cAnalysisCursor)
+			Local lnArea
+			m.lnArea = Select()
+
+			Select (This.cAnalysisCursor)
+			This.AddWarningCursor(m.tcWarning)
 			*!* REPLACE warnings WITH warnings + tcWarning +CHR(13)+CHR(10)
-			SELECT (lnArea)
-		ENDIF
-	ENDPROC
+			Select (m.lnArea)
+		Endif
+	Endproc
 
-	PROCEDURE AddWarningCursor
-		LPARAMETERS tcWarning
+	Procedure AddWarningCursor
+		Lparameters tcWarning
+		Local lcFile,lcID,lcFunc,lcType
+		m.lcType	= "警告"
+		m.lcID		= This.cWarningID
+		m.lcFile	= This.cFile
+		m.lcFunc	= This.cFuncName
+		m.lnLine	= This.nLine
 
-		LOCAL lcFile,lcID,lcFunc,lcType
-		lcType = "Warning"
-		lcID = THIS.cWarningID
-		lcFile = THIS.cFile
-		lcFunc = THIS.cFuncName
-		lnLine = THIS.nLine
-		IF NOT EMPTY(THIS.cObject)
-			lcFunc = TRIM(THIS.cObject) + "."+lcFunc
-		ENDIF
-		IF EMPTY(THIS.cAnalysisCursor)
-			THIS.BuildAnalysisCursor()
-		ENDIF
-		lcFileType = THIS.GetFileType()
+		If Not Empty(This.cObject)
+			m.lcFunc = Trim(This.cObject) + "." + m.lcFunc
+		Endif
 
-		INSERT INTO (THIS.cAnalysisCursor) (cfunc,cprog,cType,cFileType,cWarning,nLine,warnings) ;
-			VALUES (lcFunc,lcFile,lcType,lcFileType,lcID,lnLine,tcWarning)
+		If Empty(This.cAnalysisCursor)
+			This.BuildAnalysisCursor()
+		Endif
 
-	ENDPROC
+		m.lcFileType = This.GetFileType()
 
-	PROCEDURE GetFileType
-		LOCAL lcExt,lcRet
-		lcRet = "Code"
-		lcExt = UPPER(JUSTEXT(THIS.cFile))
-		DO CASE
-			CASE lcExt = "VCX"
-				lcRet = "Classes"
-			CASE lcExt = "SCX"
-				lcRet = "Forms"
-			CASE lcExt = "MNX"
-				lcRet = "Menus"
-			CASE lcExt = "PRG"
-				lcRet = "Programs"
-			CASE lcExt = "APP"
-				lcRet = "Apps"
+		Insert Into (This.cAnalysisCursor) (cfunc, cprog, cType, cFileType, cWarning, nLine, warnings) ;
+			VALUES (m.lcFunc, m.lcFile, m.lcType, m.lcFileType, m.lcID, m.lnLine, m.tcWarning)
+	Endproc
 
-		ENDCASE
-		RETURN lcRet
-	ENDPROC
+	Procedure GetFileType
+		Local lcExt,lcRet
+		m.lcRet = "代码"
+		m.lcExt = Upper(Justext(This.cFile))
 
-	PROCEDURE AddMessage
-		LPARAMETERS tcMsg
-		THIS.cMessage = THIS.cMessage + IIF(EMPTY(THIS.cMessage),"",CHR(13)+CHR(10))+tcMsg
-	ENDPROC
+		Do Case
+			Case m.lcExt = "VCX"
+				m.lcRet = "类"
 
-	PROCEDURE INIT
+			Case m.lcExt = "SCX"
+				m.lcRet = "表单"
+
+			Case m.lcExt = "MNX"
+				m.lcRet = "菜单"
+
+			Case m.lcExt = "PRG"
+				m.lcRet = "程序"
+
+			Case m.lcExt = "APP"
+				m.lcRet = "Apps"
+		Endcase
+
+		Return m.lcRet
+	Endproc
+
+	Procedure AddMessage
+		Lparameters tcMsg
+		This.cMessage = This.cMessage + Iif(Empty(This.cMessage), "", Chr(13) + Chr(10)) + m.tcMsg
+	Endproc
+
+	Procedure Init
 		*- Again don't rely on the HOME(), use SYS(16) instead. Now strip class/method names to
 		*- get the homedir for the data
-		LOCAL lcProgram
-		LOCAL lcSetExact
-		lcSetExact=SET("EXACT")
-		SET EXACT OFF
-		IF SYS(16)="PROCEDURE"
-			lcProgram = ALLTRIM(SUBSTR(SYS(16),ATC(" ",SYS(16),2)+1))
-		ELSE
-			lcProgram = ALLTRIM(STREXTRACT(SYS(16), " ", " ", 2, 2))
-		ENDIF
-		THIS.cHomeDir = JUSTPATH(lcProgram)+"\"
+		Local lcProgram
+		Local lcSetExact
+		m.lcSetExact=Set("EXACT")
 
-		IF NOT PEMSTATUS(THIS,"aCode",5)
-			THIS.ADDPROPERTY("aCode(1,4)")
-		ENDIF
-		IF NOT PEMSTATUS(THIS,"awarnings",5)
-			THIS.ADDPROPERTY("awarnings(1,3)")
-		ENDIF
-		THIS.aWarnings(1,1) = ""
-		THIS.aWarnings(1,2) = ""
-		THIS.aWarnings(1,3) = ""
-		THIS.aCode(1,1) = ""
-		IF NOT PEMSTATUS(THIS,"aRules",5)
-			THIS.ADDPROPERTY("aRules(1,5)")
-		ENDIF
-		THIS.GetPrefs()
-		THIS.CreateRuleTable()
+		Set Exact Off
 
-		THIS.LoadRules()
-		LOCAL lcDir
-		lcDir = "DO ('"+THIS.cHomeDir +"ANALYST.APP')"
-		
-		
-		DEFINE BAR 5942 OF _MTOOLS PROMPT "Code Analyst..." AFTER  _MTL_TOOLBOX
-		ON SELECTION BAR 5942 OF _MTOOLS &lcDir
+		If Sys(16) = "PROCEDURE"
+			m.lcProgram = Alltrim(Substr(Sys(16), Atc(" ", Sys(16), 2) + 1))
+		Else
+			m.lcProgram = Alltrim(Strextract(Sys(16), " ", " ", 2, 2))
+		Endif
 
-		SET EXACT &lcSetExact
+		This.cHomeDir = Justpath(lcProgram)+"\"
 
-	ENDPROC
+		If Not Pemstatus(This, "aCode", 5)
+			This.AddProperty("aCode(1, 4)")
+		Endif
 
-	PROCEDURE BuildAnalysisCursor
-		LOCAL lnArea
-		lnArea = SELECT()
-		SELECT 0
-		THIS.cAnalysisCursor = SYS(2015)
-		CREATE CURSOR (THIS.cAnalysisCursor) (;
+		If Not Pemstatus(This, "awarnings", 5)
+			This.AddProperty("awarnings(1, 3)")
+		Endif
+
+		This.aWarnings(1, 1)	= ""
+		This.aWarnings(1, 2)	= ""
+		This.aWarnings(1, 3)	= ""
+		This.aCode(1, 1)		= ""
+
+		If Not Pemstatus(This, "aRules", 5)
+			This.AddProperty("aRules(1, 5)")
+		Endif
+
+		This.GetPrefs()
+		This.CreateRuleTable()
+		This.LoadRules()
+
+		Local lcDir
+		m.lcDir = "DO ('"+This.cHomeDir +"ANALYST.APP')"
+
+		Define Bar 5942 Of _MTOOLS Prompt "代码分析..." After  _MTL_TOOLBOX
+		On Selection Bar 5942 Of _MTOOLS &lcDir
+
+		Set Exact &lcSetExact
+	Endproc
+
+	Procedure BuildAnalysisCursor
+		Local lnArea
+		m.lnArea = Select()
+
+		Select 0
+		This.cAnalysisCursor = Sys(2015)
+		Create Cursor (This.cAnalysisCursor) (;
 			cFileType C(10),;
 			cfunc C(50),;
 			cprog C(125),;
@@ -420,800 +456,937 @@ DEFINE CLASS _codeAnalyzer AS CUSTOM
 			warnings M;
 			)
 
-		LOCAL lc
-		lc = SET("COLLATE", "TO")
-		SET COLLATE TO "MACHINE"
+		Local lc
+		m.lc = Set("COLLATE", "TO")
+		Set Collate To "MACHINE"
 
-		INDEX ON cfunc+cprog+cClass TAG funcProg
+		Index On cfunc+cprog+cClass Tag funcProg
 
-		SET COLLATE TO (lc)
+		Set Collate To (m.lc)
 
-		SELECT (lnArea)
+		Select (m.lnArea)
+	Endproc
 
-	ENDPROC
-
-	PROCEDURE AddToCursor
-		LPARAMETERS tcFunc, tcProg, tcClass,tcType
+	Procedure AddToCursor
+		Lparameters tcFunc, tcProg, tcClass,tcType
 		*% Add tcClass
-		IF EMPTY(tcType)
-			tcType = JUSTEXT(tcProg)
-		ENDIF
-		IF EMPTY(tcType)
-			tcType = "Unknown"
-		ENDIF
-		IF EMPTY(THIS.cAnalysisCursor)
-			THIS.BuildAnalysisCursor()
-		ELSE
-			IF NOT USED(THIS.cAnalysisCursor)
-				THIS.BuildAnalysisCursor()
-			ENDIF
-		ENDIF
-		IF EMPTY(tcFunc)
-			tcFunc = THIS.cFile
-		ENDIF
-		IF EMPTY(tcProg)
-			tcProg = THIS.cFuncName
-		ENDIF
-		IF EMPTY(tcClass)
-			tcClass = THIS.cClassName
-		ENDIF
-		tcFunc = PADR(tcFunc,50)
-		tcProg = PADR(tcProg,125)
-		IF NOT SEEK(tcFunc+tcProg+tcClass,THIS.cAnalysisCursor)
+		If Empty(m.tcType)
+			m.tcType = Justext(m.tcProg)
+		Endif
 
-			INSERT INTO (THIS.cAnalysisCursor) (cfunc,cprog,cClass,cType) ;
-				VALUES (tcFunc,tcProg, tcClass, tcType)
-		ENDIF
-	ENDPROC
+		If Empty(m.tcType)
+			m.tcType = "未知"
+		Endif
 
-	PROCEDURE LoadRules
+		If Empty(This.cAnalysisCursor)
+			This.BuildAnalysisCursor()
 
-		IF FILE(THIS.cRuleDir+"CODERULE.DBF")
-			SELECT NAME,TYPE,Script,UniqueID FROM THIS.cRuleDir+"CODERULE" WHERE ACTIVE INTO ARRAY THIS.aRules
-			LOCAL lni
-			FOR lni = 1 TO ALEN(THIS.aRules,1)
-				IF EMPTY(THIS.aRules(lni,1))
-					LOOP
-				ENDIF
-				IF THIS.aRules(lni,2)="L"
-					THIS.lLineRules = .T. && Needed for performance checks
-					EXIT
-				ENDIF
-			ENDFOR
-		ENDIF
+		Else
+			If Not Used(This.cAnalysisCursor)
+				This.BuildAnalysisCursor()
+			Endif
+		Endif
 
-	ENDPROC
+		If Empty(m.tcFunc)
+			m.tcFunc = This.cFile
+		Endif
 
-	PROCEDURE ResetArrays
-		DIMENSION THIS.aCode(1,4)
-		THIS.aCode(1,1) = ""
-		DIMENSION THIS.aWarnings(1,3)
-		THIS.aWarnings(1,1) = ""
-		THIS.aWarnings(1,2) = ""
-		THIS.aWarnings(1,3) = ""
+		If Empty(m.tcProg)
+			m.tcProg = This.cFuncName
+		Endif
 
-	ENDPROC
+		If Empty(m.tcClass)
+			m.tcClass = This.cClassName
+		Endif
 
-	PROCEDURE Analyze
-		LPARAMETERS tcFile
-		THIS.cMessage = ""
-		THIS.cError = ""
-		LOCAL lcDir
-		lcDir = CURDIR()
-		THIS.cMainProgram = tcFile
-		IF NOT EMPTY(tcFile)
-			IF NOT FILE(tcFile) AND NOT USED(tcFile)
-				MESSAGEBOX("File "+tcFile+" does not exist.",16,"Code Analyst")
-				RETURN
+		m.tcFunc = Padr(m.tcFunc, 50)
+		m.tcProg = Padr(m.tcProg, 125)
 
-			ENDIF
-		ENDIF
-		IF ISNULL(THIS.oTherm)
-			THIS.oTherm = NEWOBJECT("cprogressform","foxref.vcx",THIS.cHomeDir+"ANALYST.APP")
-			THIS.oTherm.SetMax(100)
-		ENDIF
-		LOCAL lc
-		THIS.ResetArrays()
-		LOCAL lAlias 
-		lAlias = .F.
-		IF EMPTY(tcFile)
-			IF ASELOBJ(la,1)=0
+		If Not Seek(m.tcFunc+tcProg+tcClass, This.cAnalysisCursor)
+			Insert Into (This.cAnalysisCursor) (cfunc,cprog,cClass,cType) ;
+				VALUES (m.tcFunc, m.tcProg, m.tcClass, m.tcType)
+		Endif
+	Endproc
+
+	Procedure LoadRules
+		If File(This.cRuleDir + "CODERULE.DBF")
+			Select Name,Type,Script,UniqueID From This.cRuleDir + "CODERULE" Where Active Into Array This.aRules
+			Local lni
+
+			For m.lni = 1 To Alen(This.aRules, 1)
+				If Empty(This.aRules(lni, 1))
+			Loop
+				Endif
+
+				If This.aRules(lni, 2) = "L"
+					This.lLineRules = .T. && Needed for performance checks
+			Exit
+				Endif
+			Endfor
+		Endif
+	Endproc
+
+	Procedure ResetArrays
+		Dimension This.aCode(1,4)
+		This.aCode(1,1) = ""
+
+		Dimension This.aWarnings(1,3)
+		This.aWarnings(1,1) = ""
+		This.aWarnings(1,2) = ""
+		This.aWarnings(1,3) = ""
+	Endproc
+
+	Procedure Analyze
+		Lparameters tcFile
+		This.cMessage	= ""
+		This.cError		= ""
+
+		Local lcDir
+		m.lcDir = Curdir()
+
+		This.cMainProgram = m.tcFile
+
+		If Not Empty(m.tcFile)
+			If Not File(m.tcFile) And Not Used(m.tcFile)
+				Messagebox("文件 " + m.tcFile + " 不存在。", 16, "代码分析")
+				Return
+			Endif
+		Endif
+
+		If Isnull(This.oTherm)
+			This.oTherm = Newobject("cprogressform", "foxref.vcx", This.cHomeDir + "ANALYST.APP")
+			This.oTherm.SetMax(100)
+		Endif
+
+		Local lc
+		This.ResetArrays()
+
+		Local lAlias
+		m.lAlias = .F.
+
+		If Empty(m.tcFile)
+			If Aselobj(la, 1)=0
 				** Should we use the Active project or not?
 				*!* IF TYPE("_VFP.ActiveProject")="U"
 
-				tcFile = GETFILE("PRG;PJX;VCX;SCX","Select file","Open",0,"Select file to analyze")
+				m.tcFile = Getfile("PRG;PJX;VCX;SCX", "选择文件", "打开", 0, "选择用于分析的文件")
 
 				*!*					ELSE
 				*!*						tcFile = _VFP.ActiveProject.Name
 				*!*					ENDIF
-				IF EMPTY(tcFile)
-					RETURN
-				ENDIF
-				SET DEFAULT TO (STRTRAN(tcFile,JUSTFNAME(tcFile)))
-				THIS.cHomeDir = (STRTRAN(tcFile,JUSTFNAME(tcFile)))
+				If Empty(m.tcFile)
+					Return
+				Endif
+
+				Set Default To (Strtran(m.tcFile, Justfname(m.tcFile)))
+
+				This.cHomeDir = (Strtran(m.tcFile, Justfname(m.tcFile)))
+			Endif
+
+		Else
+			If Used(m.tcFile)
+				m.lAlias = .T.
+
+			Else
+				Set Default To (Strtran(m.tcFile, Justfname(m.tcFile)))
+				This.cHomeDir = (Strtran(m.tcFile, Justfname(m.tcFile)))
+			Endif
+		Endif
+
+		Try
+			This.csetesc		= On("ESCAPE")
+			This.csetEscLabel	= On("KEY", "ESC")
+
+			On Escape _Screen._Analyst.StopAnalysis()
+			On Key Label Escape _Screen.StopAnalysis = .T.
+
+			This.PreValidate()
+
+			If Empty(m.tcFile)
+				m.lc = "当前对象"
+
+				This.cFile			= m.lc
+				This.cMainProgram	= m.lc
+
+				This.oTherm.SetDescription("正在分析 " + m.lc)
+				This.oTherm.SetProgress(1)
+
+				DoEvents
+
+				This.oTherm.Show()
+				This.AddToCursor(la(1).Name, la(1).Name, '', "对象")
+
+				This.AnalyzeCurrObj()
+
+			Else
+				m.lc = m.tcFile
+
+				If Empty(This.cMainProgram)
+					This.cMainProgram = m.lc
+				Endif
+
+				This.cFile = m.lc
+
+				This.oTherm.SetDescription("正在分析 " + m.lc)
+				This.oTherm.SetProgress(1)
+
+				DoEvents
+
+				This.oTherm.Show()
+				This.AddToCursor(m.lc, m.lc, '', "文件")
+				This.AnalFile(m.tcFile, m.lAlias)
+			Endif
+
+			This.oTherm.Hide()
+
+			If This.lDisplayForm
+				If Not This.lProjectRun Or Reccount(This.cAnalysisCursor) > 0
+					If Not Pemstatus(_Screen, "_analysisform", 5)
+						_Screen.AddProperty("_analysisform", .Null.)
+					Endif
+
+					If Isnull(_Screen._Analysisform)
+						Select 0
+						Do Form codeanalresults Name _Screen._Analysisform
+					Else
+						_Screen._Analysisform.Refresh()
+					Endif
+				Endif
+			Endif
+		Catch To m.loErr
+			If Not Isnull(This.oTherm)
+				This.oTherm.Hide()
+			Endif
+
+			Error m.loErr.Procedure + " 中的第 " + Transform(m.loErr.Lineno) + " 行发生错误：" + m.loErr.Message
+		Endtry
+
+		This.PostValidate()
+
+		Set Default To (m.lcDir)
+
+		Local lc
+		m.lc = This.csetesc
+
+		On Escape &lc
+		m.lc = This.cSetEscLabel
+
+		On Key Label Escape &lc
 
 
-			ENDIF
-		ELSE
-			IF USED(tcFile)
-				lAlias = .T.
-			ELSE
-				SET DEFAULT TO (STRTRAN(tcFile,JUSTFNAME(tcFile)))
-				THIS.cHomeDir = (STRTRAN(tcFile,JUSTFNAME(tcFile)))
-			ENDIF
-		ENDIF
+	Procedure StopAnalysis
+		Local lc
+		If Pemstatus(_Screen, "StopAnalysis", 5)
+			_Screen.StopAnalysis = .T.
+		Endif
+		
+		m.lc = This.csetesc
+		
+		On Escape &lc
+		
+		This.oTherm.Hide()
+		Cancel
 
-		TRY
-			THIS.csetesc = ON("ESCAPE")
-			THIS.csetEscLabel = ON("KEY","ESC")
-			ON ESCAPE _SCREEN._Analyst.StopAnalysis()
-			ON KEY LABEL ESCAPE _SCREEN.StopAnalysis = .T.
+	Procedure AnalyzeCurrObj
+		Lparameters tlWork
 
-			THIS.PreValidate()
-			IF EMPTY(tcFile)
-				lc = "Current Object"
-				THIS.cFile = lc
-				THIS.cMainProgram = lc
-				THIS.oTherm.SetDescription("Analyzing "+lc)
-				THIS.oTherm.SetProgress(1)
-				DOEVENTS
-				THIS.oTherm.SHOW()
-				THIS.AddToCursor(la(1).NAME,la(1).NAME,'',"Object")
+		This.cFile = "当前对象： " + la(1).Name
 
-				THIS.AnalyzeCurrObj()
-			ELSE
-				lc = tcFile
-				IF EMPTY(THIS.cMainProgram)
-					THIS.cMainProgram = lc
-				ENDIF
-				THIS.cFile = lc
-				THIS.oTherm.SetDescription("Analyzing "+lc)
-				THIS.oTherm.SetProgress(1)
-				DOEVENTS
-				THIS.oTherm.SHOW()
-				THIS.AddToCursor(lc,lc,'',"File")
-				THIS.AnalFile(tcFile,lAlias)
-			ENDIF
+		Dimension This.aCode(1, 4)
+		This.aCode(1, 1) = ""
 
-			THIS.oTherm.HIDE()
-			IF THIS.lDisplayForm
-				IF NOT THIS.lProjectRun OR RECCOUNT(THIS.cAnalysisCursor)>0
-					IF NOT PEMSTATUS(_SCREEN,"_analysisform",5)
-						_SCREEN.ADDPROPERTY("_analysisform",.NULL.)
-					ENDIF
-					IF ISNULL(_SCREEN._Analysisform)
-						SELECT 0
-						DO FORM codeanalresults NAME _SCREEN._Analysisform
-					ELSE
-						_SCREEN._Analysisform.REFRESH()
-					ENDIF
-				ENDIF
-			ENDIF
-		CATCH TO loErr
-			IF NOT ISNULL(THIS.oTherm)
-				THIS.oTherm.HIDE()
-			ENDIF
+		This.analyzeObj(la(1))
+		m.lc = "代码审查" + Chr(13) + Chr(10)
 
-			ERROR loErr.MESSAGE+ " on line " + TRANSFORM(loErr.LINENO)+" of "+loErr.PROCEDURE
-		ENDTRY
-		THIS.PostValidate()
-		SET DEFAULT TO (lcDir)
-		LOCAL lc
-		lc = THIS.csetesc
-		ON ESCAPE &lc
-		lc = THIS.cSetEscLabel
-		ON KEY LABEL ESCAPE &lc
+		If Not Empty(This.aCode(1, 1))
+			=Asort(This.aCode, 2)
+		Endif
 
+		m.lc = m.lc + Chr(13) + Chr(10) + "--- 优秀代码 ---" + Chr(13) + Chr(10)
 
-	PROCEDURE StopAnalysis
-		LOCAL lc
-		IF PEMSTATUS(_SCREEN,"StopAnalysis",5)
-			_SCREEN.StopAnalysis = .T.
-		ENDIF
-		lc = THIS.csetesc
-		ON ESCAPE &lc
-		THIS.oTherm.HIDE()
-		CANCEL
+		Local llTitle
+		m.llTitle = .F.
 
-	PROCEDURE AnalyzeCurrObj
-		LPARAMETERS tlWork
+		For m.lni = 1 To Alen(This.aCode, 1)
+			If Empty(This.aCode(m.lni, 1))
+		Loop
+			Endif
 
-		THIS.cFile = "Current Object: "+la(1).NAME
-		DIMENSION THIS.aCode(1,4)
-		THIS.aCode(1,1) = ""
+			If This.aCode(m.lni, 2) > 40 And Not m.llTitle
+				m.llTitle = .T.
+				m.lc = m.lc + Chr(13) + Chr(10) + "--- 可能的选择 ---" + Chr(13) + Chr(10)
+			Endif
 
-		THIS.analyzeObj(la(1))
-		lc = "Code Review" + CHR(13)+CHR(10)
+			If Not m.tlWork  Or (m.tlWork And ;
+					(This.aCode(m.lni, 2) > 40 Or ;
+					(This.aCode(m.lni, 3) < (Max(1, This.aCode(m.lni, 2) / 2)) And Not ;
+					THIS.aCode(m.lni, 3) = This.aCode(m.lni, 2))))
 
-		IF NOT EMPTY(THIS.aCode(1,1))
-			=ASORT(THIS.aCode,2)
+			Else
+				This.aCode(m.lni, 1) = "删除"
+			Endif
+		Endfor
 
-		ENDIF
-		lc = lc + CHR(13)+CHR(10)+"--- Good Code ---"+CHR(13)+CHR(10)
-		LOCAL llTitle
-		llTitle = .F.
-		FOR lni = 1 TO ALEN(THIS.aCode,1)
-			IF EMPTY(THIS.aCode(lni,1))
-				LOOP
-			ENDIF
-			IF THIS.aCode(lni,2)>40 AND NOT llTitle
-				llTitle = .T.
-				lc = lc + CHR(13)+CHR(10)+"--- Possible Candidates ---"+CHR(13)+CHR(10)
-			ENDIF
-			IF NOT tlWork  OR (tlWork AND ;
-					(THIS.aCode(lni,2)>40 OR ;
-					(THIS.aCode(lni,3)<(MAX(1,THIS.aCode(lni,2)/2)) AND NOT ;
-					THIS.aCode(lni,3)=THIS.aCode(lni,2))))
+		m.ln	= Alen(This.aCode, 1)
+		m.ln2	= 1
 
-			ELSE
-				THIS.aCode(lni,1) = "DELETE"
-			ENDIF
-		ENDFOR
+		For m.lni = 1 To m.ln
+			If Not Empty(This.aCode(m.lni, 1))
+				If This.aCode(lni,1) = "删除"
+					=Adel(This.aCode, m.lni)
+					m.lni = m.lni - 1
+		Loop
+				Else
+					m.ln2 = m.ln2 + 1
+				Endif
+			Endif
+		Endfor
 
-		ln = ALEN(THIS.aCode,1)
-		ln2 = 1
-		FOR lni = 1 TO ln
-			IF NOT EMPTY(THIS.aCode(lni,1))
-				IF THIS.aCode(lni,1)="DELETE"
-					=ADEL(THIS.aCode,lni)
-					lni = lni-1
-					LOOP
-				ELSE
-					ln2=ln2+1
-				ENDIF
-			ENDIF
-		ENDFOR
-		DIMENSION THIS.aCode(ln2,4)
-		IF EMPTY(THIS.aCode(ln2,1))
-			THIS.aCode(ln2,1)=""
-		ENDIF
-		RETURN
+		Dimension This.aCode(m.ln2, 4)
+
+		If Empty(This.aCode(m.ln2, 1))
+			This.aCode(ln2, 1) = ""
+		Endif
+
+		Return
 
 
-	PROCEDURE analyzeObj
-		LPARAMETERS toObj
+	Procedure analyzeObj
+		Lparameters toObj
 
-		LOCAL lni
-		LOCAL lcText
-		lcText = ""
-		LOCAL loObj
+		Local lni
+		Local lcText
+		m.lcText = ""
+		Local loObj
 
-		LOCAL la(1)
-		LOCAL lnMethods
-		THIS.oTherm.setstatus("Object: "+toObj.NAME)
+		Local la(1)
+		Local lnMethods
+		This.oTherm.setstatus("对象： " + m.toObj.Name)
 
-		lnMethods = AMEMBERS(la,toObj,1)
+		m.lnMethods = Amembers(m.la, m.toObj, 1)
 
-		THIS.AddToCursor(toObj.NAME,toObj.NAME,'',"Object")
+		This.AddToCursor(m.toObj.Name, m.toObj.Name, '', "对象")
 
-		IF NOT PEMSTATUS(toObj,"Name",5)
-			RETURN
-		ENDIF
+		If Not Pemstatus(m.toObj, "Name", 5)
+			Return
+		Endif
 
-		FOR lni = 1 TO lnMethods
-			IF la(lni,2)="M" OR la(lni,2)="E"
-				IF PEMSTATUS(toObj,"ReadMethod",5)
-					lcContent = toObj.READMETHOD(la(lni,1))
-					IF NOT EMPTY(lcContent)
-						THIS.Add2Array(toObj.NAME+"."+la(lni,1),ALINES(laX,lcContent),@laX)
+		For m.lni = 1 To m.lnMethods
+			If m.la(m.lni,2) = "M" Or m.la(m.lni,2) = "E"
+				If Pemstatus(m.toObj, "ReadMethod", 5)
+					m.lcContent = m.toObj.ReadMethod(m.la(m.lni, 1))
+
+					If Not Empty(m.lcContent)
+						This.Add2Array(m.toObj.Name + "." + m.la(m.lni, 1), Alines(laX, m.lcContent), @laX)
 						*!* lcText = lcText + toobj.Name+"."+la(lni,1) + " - "+LTRIM(STR(ALINES(laX,lcCOntent)))+CHR(13)+CHR(10)
-					ENDIF
-				ENDIF
-			ENDIF
-		ENDFOR
-		THIS.ValidateObject(toObj)
+					Endif
+				Endif
+			Endif
+		Endfor
 
-		FOR lni = 1 TO lnMethods
-			IF la(lni,2)="Object"
-				loObj = toObj.&la(lni,1)
-				THIS.analyzeObj(loObj)
-			ENDIF
-		ENDFOR
+		This.ValidateObject(m.toObj)
+
+		For m.lni = 1 To m.lnMethods
+			If m.la(m.lni, 2) = "Object"
+				m.loObj = m.toObj.&la(m.lni, 1)
+			
+				This.analyzeObj(m.loObj)
+			Endif
+		Endfor
 
 
-	PROCEDURE AnalyzeCode
-		LPARAMETERS tcFile,tlWork
-		IF EMPTY(tcFile)
-			tcFile = GETFILE("PRG")
-		ENDIF
+	Procedure AnalyzeCode
+		Lparameters tcFile,tlWork
+		If Empty(m.tcFile)
+			m.tcFile = Getfile("PRG")
+		Endif
 
-		DIMENSION THIS.aCode(1,4)
-		THIS.aCode(1,1) = ""
-		THIS.aCode(1,2) = 0
-		THIS.aCode(1,3) = 0
-		THIS.aCode(1,4) = ""
-		LOCAL lni
-		IF MEMLINES(tcFile)>1
-			THIS.analstring(tcFile)
+		Dimension This.aCode(1,4)
+		This.aCode(1,1) = ""
+		This.aCode(1,2) = 0
+		This.aCode(1,3) = 0
+		This.aCode(1,4) = ""
 
-		ELSE
-			THIS.AnalFile(tcFile)
-		ENDIF
+		Local lni
 
-		lc = "Code Review" + CHR(13)+CHR(10)
+		If Memlines(m.tcFile) > 1
+			This.analstring(m.tcFile)
 
-		=ASORT(THIS.aCode,2)
+		Else
+			This.AnalFile(m.tcFile)
+		Endif
 
-	ENDPROC
+		m.lc = "代码审查" + Chr(13) + Chr(10)
 
-	PROCEDURE ScanSCXVCX
-		LPARAMETERS tcFile
-		THIS.cFile = tcFile
-		LOCAL lnArea
-		lnArea = SELECT()
-		LOCAL lcAlias
-		lcAlias = SYS(2015)
-		SELECT 0
-		USE (tcFile) AGAIN SHARED ALIAS &lcAlias
-		SCAN FOR NOT EMPTY(methods)
-			THIS.cObject = TRIM(PARENT)+IIF(EMPTY(PARENT),"",".")+TRIM(objname)
-			THIS.cClassName = objname
-			THIS.analstring(methods,tcFile)
-			THIS.cObject = ""
-			THIS.cClassName = ""
-		ENDSCAN
-		SELECT (lcAlias)
-		USE
-		SELECT (lnArea)
-	ENDPROC
+		= Asort(This.aCode, 2)
+	Endproc
 
-	PROCEDURE ScanMNX
-		LPARAMETERS tcFile
-		THIS.cFile = tcFile
-		LOCAL lnArea
-		lnArea = SELECT()
-		LOCAL lnArea,lcAlias
-		lcAlias = SYS(2015)
-		SELECT 0
-		USE (tcFile) AGAIN SHARED ALIAS &lcAlias
-		SCAN
-			IF NOT EMPTY(SETUP)
-				THIS.analstring(SETUP,tcFile+" Setup")
-			ENDIF
-			IF NOT EMPTY(PROCEDURE)
-				THIS.analstring(PROCEDURE,tcFile + " Procedures")
-			ENDIF
-			IF NOT EMPTY(cleanup)
-				THIS.analstring(cleanup,tcFile + " Cleanup")
-			ENDIF
-		ENDSCAN
-		SELECT (lcAlias)
-		USE
-		SELECT (lnArea)
-	ENDPROC
+	Procedure ScanSCXVCX
+		Lparameters tcFile
+		This.cFile = m.tcFile
 
-	PROCEDURE BuildFakeProject
-		LPARAMETERS tcDir
-		LOCAL lnArea
-		lnArea = SELECT()
-		LOCAL lcFile
-		lcFile = SYS(2015)
-		THIS.cFile = lcFile
-		SELECT 0
-		CREATE CURSOR (lcFile) (TYPE C(1), NAME M)
-		THIS.addtoproj(tcDir,lcFile)
-		SELECT (lnArea)
+		Local lnArea
+		m.lnArea = Select()
 
-	ENDPROC
-	FUNCTION GetFileExtensionType
-		LPARAMETERS tcExt
-		LOCAL lcRet
-		lcRet = "X"
-		DO CASE
-			CASE tcExt="PRG"
-				lcRet = "P"
-		ENDCASE
+		Local lcAlias
+		m.lcAlias = Sys(2015)
 
-		RETURN lcRet
-	ENDFUNC
+		Select 0
+		Use (m.tcFile) Again Shared Alias &lcAlias
 
-	PROCEDURE AddToProj
-		LPARAMETERS tcDir,tcAlias
-		LOCAL lnFiles
-		LOCAL lnDirs
-		LOCAL la(1)
-		LOCAL lni
-		LOCAL lcExt
+		Scan For Not Empty(methods)
+			This.cObject	= Trim(Parent)+Iif(Empty(Parent),"",".")+Trim(objname)
+			This.cClassName = objname
 
-IF RIGHT(tcDir,1)="\"
-	tcDir = LEFT(tcDir,LEN(tcDir)-1)
-ENDIF
-		lnFiles = ADIR(la,tcDir+"\*.*")
-		FOR lni = 1 TO lnFiles
-			IF LEFT(la(lni,1),1)<>"."
-				lcExt = JUSTEXT(la(lni,1))
-				IF INLIST(lcExt,"PRG","VCX","MNX","FRX","SCX")
-					INSERT INTO (tcAlias) VALUES ("P",FULLPATH(tcDir+"\"+la(lni,1)))
-				ENDIF
-			ENDIF
-		ENDFOR
+			This.analstring(methods, tcFile)
 
-		lnDirs = ADIR(la,tcDir+"\*.","D")
-		FOR lni = 1 TO lnDirs
-			IF LEFT(la(lni,1),1)<>"."
-				
-				THIS.AddToProj(tcDir+"\"+la(lni,1), tcAlias)
-			ENDIF
-		ENDFOR
-	ENDPROC
+			This.cObject	= ""
+			This.cClassName	= ""
+		Endscan
+
+		Select (lcAlias)
+		Use
+		Select (lnArea)
+	Endproc
+
+	Procedure ScanMNX
+		Lparameters tcFile
+		This.cFile = m.tcFile
+
+		Local lnArea
+		m.lnArea = Select()
+
+		Local lnArea,lcAlias
+		m.lcAlias = Sys(2015)
+
+		Select 0
+		Use (m.tcFile) Again Shared Alias &lcAlias
+
+		Scan
+			If Not Empty(Setup)
+				This.analstring(Setup, m.tcFile + " Setup")
+			Endif
+
+			If Not Empty(Procedure)
+				This.analstring(Procedure, m.tcFile + " Procedures")
+			Endif
+
+			If Not Empty(cleanup)
+				This.analstring(cleanup, m.tcFile + " Cleanup")
+			Endif
+		Endscan
+
+		Select (lcAlias)
+		Use
+		Select (lnArea)
+	Endproc
+
+	Procedure BuildFakeProject
+		Lparameters tcDir
+		Local lnArea
+		m.lnArea = Select()
+
+		Local lcFile
+		m.lcFile = Sys(2015)
+
+		This.cFile = m.lcFile
+
+		Select 0
+		Create Cursor (lcFile) (Type C(1), Name M)
+
+		This.addtoproj(m.tcDir, m.lcFile)
+		Select (m.lnArea)
+	Endproc
+
+	Function GetFileExtensionType
+		Lparameters tcExt
+		Local lcRet
+		m.lcRet = "X"
+
+		Do Case
+			Case m.tcExt = "PRG"
+				m.lcRet = "P"
+		Endcase
+
+		Return m.lcRet
+	Endfunc
+
+	Procedure AddToProj
+		Lparameters tcDir,tcAlias
+		Local lnFiles
+		Local lnDirs
+		Local la(1)
+		Local lni
+		Local lcExt
+
+		If Right(m.tcDir, 1) = "\"
+			m.tcDir = Left(m.tcDir, Len(m.tcDir) - 1)
+		Endif
+
+		m.lnFiles = Adir(la, m.tcDir + "\*.*")
+
+		For m.lni = 1 To m.lnFiles
+			If Left(m.la(m.lni, 1), 1) <> "."
+				m.lcExt = Justext(m.la(m.lni, 1))
+
+				If Inlist(m.lcExt, "PRG", "VCX", "MNX", "FRX", "SCX")
+					Insert Into (m.tcAlias) Values ("P", Fullpath(m.tcDir + "\" + m.la(m.lni, 1)))
+				Endif
+			Endif
+		Endfor
+
+		m.lnDirs = Adir(la, m.tcDir + "\*.", "D")
+
+		For m.lni = 1 To m.lnDirs
+			If Left(m.la(m.lni, 1), 1) <> "."
+				This.AddToProj(m.tcDir + "\" + m.la(m.lni, 1), m.tcAlias)
+			Endif
+		Endfor
+	Endproc
 	
-	PROCEDURE scanDirectory
-		LPARAMETERS tcFile
-		
-		LOCAL lnArea,lcFile
-		lnArea = SELECT()
-		LOCAL lnArea,lcAlias
-		IF NOT PEMSTATUS(_SCREEN,"StopAnalysis",5)
-			_SCREEN.AddProperty("StopAnalysis",.F.)
-		ENDIF
-		_SCREEN.StopAnalysis = .F.
-		SELECT (tcFile)
-		lcAlias = ALIAS()
-		SCAN FOR NOT TYPE="H"
-			IF _Screen.StopAnalysis
-				EXIT
-			ENDIF
-			THIS.oTherm.SetProgress(RECNO()/RECCOUNT()*95)
-			lcFile = STRTRAN(NAME,CHR(0))
-			THIS.AnalFile(lcFile)
-		ENDSCAN
-		SELECT (lcAlias)
-		USE
-		SELECT (lnArea)
+	Procedure scanDirectory
+		Lparameters tcFile
 
-	ENDPROC
+		Local lnArea,lcFile
+		m.lnArea = Select()
 
-	PROCEDURE scanProject
-		LPARAMETERS tcFile
-		THIS.cFile = tcFile
-		LOCAL lnArea,lcFile
-		lnArea = SELECT()
-		LOCAL lnArea,lcAlias
-		lcAlias = SYS(2015)
-		SELECT 0
-		USE (tcFile) AGAIN SHARED ALIAS &lcAlias
-		SCAN FOR NOT TYPE="H"
-			THIS.oTherm.SetProgress(RECNO()/RECCOUNT()*95)
-			lcFile = STRTRAN(NAME,CHR(0))
-			THIS.AnalFile(lcFile)
-		ENDSCAN
-		SELECT (lcAlias)
-		USE
-		SELECT (lnArea)
+		Local lnArea,lcAlias
 
-	ENDPROC
-	PROCEDURE AnalFile
-		LPARAMETERS tcFile,tlAlias
+		If Not Pemstatus(_Screen, "StopAnalysis", 5)
+			_Screen.AddProperty("StopAnalysis", .F.)
+		Endif
 
-IF PCOUNT()=1
-	tlAlias = .F.
-ENDIF
-		THIS.oTherm.SetDescription("Analyzing "+tcFile)
-		THIS.cFile = tcFile
-IF tlAlias
-THIS.ScanDirectory(tcFile)
-ELSE
-LOCAL lcRet
-lcRet = ""
+		_Screen.StopAnalysis = .F.
 
-		LOCAL lcExt
-		lcExt = UPPER(JUSTEXT(tcFile))
-		TRY
-		DO CASE
-			CASE lcExt = "PRG"
-				lcRet = THIS.analstring(FILETOSTR(tcFile))
-			CASE lcExt = "SCX"
-				lcRet = THIS.ScanSCXVCX(tcFile)
-			CASE lcExt = "MNX"
-				lcRet = THIS.ScanMNX(tcFile)
+		Select (m.tcFile)
+		m.lcAlias = Alias()
 
-			CASE lcExt = "FRX"
-				lcRet = ""
+		Scan For Not Type="H"
+			If _Screen.StopAnalysis
+		Exit
+			Endif
 
-			CASE lcExt="ZIP"
-				lcRet = "Zip File - Ignored"
+			This.oTherm.SetProgress(Recno() / Reccount() * 95)
 
-			CASE lcExt = "BAK"
-				lcRet = "Ignored"
-			CASE lcExt = "APP"
-				lcRet = ""
+			m.lcFile = Strtran(Name, Chr(0))
+			This.AnalFile(m.lcFile)
+		Endscan
 
-			CASE lcExt = "FLL"
-				lcRet = ""
+		Select (m.lcAlias)
+		Use
+		Select (m.lnArea)
+	Endproc
 
-			CASE lcExt = "DBF"
-				lcRet = ""
+	Procedure scanProject
+		Lparameters tcFile
+		This.cFile = m.tcFile
 
-			CASE lcExt = "PJX"
-				lcRet = THIS.scanProject(tcFile)
+		Local lnArea,lcFile
+		m.lnArea = Select()
 
-			CASE lcExt = "VCX"
-				lcRet = THIS.ScanSCXVCX(tcFile)
+		Local lnArea,lcAlias
+		m.lcAlias = Sys(2015)
 
-			CASE INLIST(lcExt,"BMP","TXT","MSK","INC","H","JPG","GIF","ICO","SCT","MNT","FPT","TBK","PJT","VCT","FRA","SCA","MNA","VCA","XML","HTM","FXP")
+		Select 0
+		Use (tcFile) Again Shared Alias &lcAlias
 
-			OTHERWISE
-			LOCAL lc
-				TRY
-				lc = THIS.analstring(FILETOSTR(tcFile))
-				CATCH
-				lc = ""
-				ENDTRY
-				lcRet = lc
-		ENDCASE
-		
-		CATCH TO loErr
-		lcRet = "Error reading: " + tcFile +": "+loErr.Message
-		ENDTRY
-		RETURN lcRet
-ENDIF
+		Scan For Not Type="H"
+			This.oTherm.SetProgress(Recno() / Reccount() * 95)
 
-	PROCEDURE analstring
+			m.lcFile = Strtran(Name,Chr(0))
+			This.AnalFile(m.lcFile)
+		Endscan
+
+		Select (m.lcAlias)
+		Use
+		Select (m.lnArea)
+	Endproc
+
+	Procedure AnalFile
+		Lparameters tcFile,tlAlias
+
+		If Pcount() = 1
+			m.tlAlias = .F.
+		Endif
+
+		This.oTherm.SetDescription("正在分析 " + m.tcFile)
+		This.cFile = m.tcFile
+
+		If m.tlAlias
+			This.ScanDirectory(m.tcFile)
+		Else
+			Local lcRet
+			m.lcRet = ""
+
+			Local lcExt
+			m.lcExt = Upper(Justext(m.tcFile))
+
+			Try
+				Do Case
+					Case m.lcExt = "PRG"
+						m.lcRet = This.analstring(Filetostr(m.tcFile))
+
+					Case m.lcExt = "SCX"
+						m.lcRet = This.ScanSCXVCX(m.tcFile)
+
+					Case m.lcExt = "MNX"
+						m.lcRet = This.ScanMNX(m.tcFile)
+
+					Case m.lcExt = "FRX"
+						m.lcRet = ""
+
+					Case m.lcExt="ZIP"
+						m.lcRet = "压缩文件-已忽略"
+
+					Case m.lcExt = "BAK"
+						m.lcRet = "已忽略"
+
+					Case m.lcExt = "APP"
+						m.lcRet = ""
+
+					Case m.lcExt = "FLL"
+						m.lcRet = ""
+
+					Case m.lcExt = "DBF"
+						m.lcRet = ""
+
+					Case m.lcExt = "PJX"
+						m.lcRet = This.scanProject(m.tcFile)
+
+					Case m.lcExt = "VCX"
+						m.lcRet = This.ScanSCXVCX(m.tcFile)
+
+					Case Inlist(m.lcExt,"BMP","TXT","MSK","INC","H","JPG","GIF","ICO","SCT","MNT","FPT","TBK","PJT","VCT","FRA","SCA","MNA","VCA","XML","HTM","FXP")
+
+					Otherwise
+						Local lc
+
+						Try
+							m.lc = This.analstring(Filetostr(m.tcFile))
+						Catch
+							m.lc = ""
+						Endtry
+
+						m.lcRet = m.lc
+				Endcase
+
+			Catch To m.loErr
+				m.lcRet = "读取文件 " + m.tcFile +" 错误: " + m.loErr.Message
+			Endtry
+
+			Return m.lcRet
+		Endif
+
+	Procedure analstring
 		** Takes a piece of code and looks for any breaks in it.
 		** if someone wanted to write a rule to analyze entire pieces of code, here is where
 		** it would go.
 		** so the first rule is to break it into individual lines and analyze them.
 
-		LPARAMETERS tcString,tcName
+		Lparameters tcString,tcName
 
-		LOCAL la(1)
-		LOCAL laBreak(3)
+		Local la(1)
+		Local laBreak(3)
 		laBreak(1) = "PROCEDURE"
 		laBreak(2) = "FUNCTION"
 		laBreak(3) = "DEFINE"
 
-		LOCAL lnTotal
-		lnTotal=ALINES(la,tcString)
+		Local lnTotal
+		m.lnTotal = Alines(la, m.tcString)
 
-		LOCAL lni
+		Local lni
 
-		LOCAL lcText
-		lcText = ""
-		LOCAL lcFunc,lcWord
-		LOCAL lnCount
-		lnCount = 0
-		LOCAL laX(1)
+		Local lcText
+		m.lcText = ""
+
+		Local lcFunc,lcWord
+		Local lnCount
+		m.lnCount = 0
+
+		Local laX(1)
 		laX(1)= ""
-		lcFunc = "Program" && JUSTFNAME(tcFile)
-		FOR lni = 1 TO lnTotal
-			THIS.oTherm.setstatus("Line "+LTRIM(STR(lni))+" of "+LTRIM(STR(lnTotal)))
-			lcText = la(lni)
+		m.lcFunc = "Program" && JUSTFNAME(tcFile)
+
+		For m.lni = 1 To m.lnTotal
+			This.oTherm.setstatus("共 " + Ltrim(Str(m.lnTotal)) + " 行第 "+Ltrim(Str(m.lni))+ " 行" )
+
+			m.lcText = m.la(m.lni)
 			*% Don't uppercase - some rules may need to be case sensitive
 			*% lcText = ALLTRIM(UPPER(STRTRAN(lcText,"	")))
-			lcText = ALLTRIM(STRTRAN(lcText,"	"))
-			IF EMPTY(lcText)
-				LOOP
-			ENDIF
+			m.lcText = Alltrim(Strtran(m.lcText, "	"))
+
+			If Empty(m.lcText)
+		Loop
+			Endif
+
 			*!* THIS.ValidateLine(lcText)
-			lcWord = LEFT(lcText,ATC(" ",lcText)-1)
-			IF EMPTY(lcWord) OR ASCAN(laBreak,UPPER(lcWord))=0
-				lnCount = lnCount+1
-				DIMENSION laX(IIF(EMPTY(laX(1)),1,ALEN(laX,1)+1))
-				laX(ALEN(laX,1))=lcText
-			ELSE
-				THIS.Add2Array(lcFunc,lnCount,@laX)
-				lnCount = 0
-				IF lcText = "DEFINE CLASS"
-					lcFunc = ALLTRIM(STRTRAN(lcText,"DEFINE CLASS"))
-					lcFunc = LEFT(lcFunc,ATC(" ",lcFunc)-1)
-					THIS.cObject = lcFunc
-				ELSE
-					lcFunc = ALLTRIM(STRTRAN(lcText,lcWord))
-				ENDIF
-				DIMENSION laX(1)
+			m.lcWord = Left(m.lcText, Atc(" ", m.lcText) - 1)
+
+			If Empty(m.lcWord) Or Ascan(laBreak, Upper(m.lcWord)) = 0
+				m.lnCount = m.lnCount + 1
+				Dimension laX(Iif(Empty(laX(1)), 1 ,Alen(laX,1) + 1))
+
+				m.laX(Alen(m.laX, 1)) = m.lcText
+
+			Else
+				This.Add2Array(m.lcFunc, m.lnCount, @laX)
+
+				m.lnCount = 0
+
+				If m.lcText = "DEFINE CLASS"
+					m.lcFunc = Alltrim(Strtran(m.lcText, "DEFINE CLASS"))
+					m.lcFunc = Left(m.lcFunc,Atc(" ", m.lcFunc) - 1)
+
+					This.cObject = m.lcFunc
+				Else
+					m.lcFunc = Alltrim(Strtran(m.lcText, m.lcWord))
+				Endif
+
+				Dimension laX(1)
 				laX(1) = ""
-			ENDIF
-		ENDFOR
-		THIS.Add2Array(lcFunc,lnCount,@laX)
-		THIS.nFileLines = lnTotal
-		THIS.AddToCursor(tcName,tcName,THIS.cClassName,"File")
-		THIS.ValidateFile(tcString,tcName)
+			Endif
+		Endfor
 
-	ENDPROC
+		This.Add2Array(m.lcFunc, m.lnCount, @laX)
 
-	PROCEDURE ValidateObject
-		LPARAMETERS toObj
-		LOCAL lni,lcFunc
-		THIS.oObject = toObj
-		THIS.cObject = toObj.NAME
-		FOR lni = 1 TO ALEN(THIS.aRules,1)
-			IF EMPTY(THIS.aRules(lni,1))
-				LOOP
-			ENDIF
-			IF ALEN(THIS.aRules,2)>3
-				THIS.cWarningID = THIS.aRules(lni,4)
-			ELSE
-				THIS.cWarningID = ""
+		This.nFileLines = m.lnTotal
 
-			ENDIF
-			IF THIS.aRules(lni,2)="O"
-				lcFunc = THIS.aRules(lni,3)
-				EXECSCRIPT(lcFunc)
-			ENDIF
-		ENDFOR
+		This.AddToCursor(m.tcName, m.tcName, This.cClassName, "文件")
+		This.ValidateFile(m.tcString, m.tcName)
+	Endproc
 
-	ENDPROC
-	PROCEDURE ValidateLine
-		LPARAMETERS tcLine
-		LOCAL lni,lcFunc
+	Procedure ValidateObject
+		Lparameters toObj
+		Local lni,lcFunc
+		This.oObject = m.toObj
+		This.cObject = m.toObj.Name
 
-		THIS.cLine = tcLine
-		FOR lni = 1 TO ALEN(THIS.aRules,1)
-			IF EMPTY(THIS.aRules(lni,1))
-				LOOP
-			ENDIF
-			IF ALEN(THIS.aRules,2)>3
-				THIS.cWarningID = THIS.aRules(lni,4)
-			ELSE
-				THIS.cWarningID = ""
+		For m.lni = 1 To Alen(This.aRules, 1)
+			If Empty(This.aRules(m.lni, 1))
+		Loop
+			Endif
 
-			ENDIF
-			IF THIS.aRules(lni,2)="L"
-				lcFunc = THIS.aRules(lni,3)
-				EXECSCRIPT(lcFunc)
-			ENDIF
-		ENDFOR
+			If Alen(This.aRules, 2) > 3
+				This.cWarningID = This.aRules(m.lni, 4)
 
-	PROCEDURE ValidateFile
-		LPARAMETERS tcFile,tcName
+			Else
+				This.cWarningID = ""
+			Endif
 
-		LOCAL lni,lcFunc
-		THIS.cFile = tcName
-		THIS.cCode = tcFile
-		FOR lni = 1 TO ALEN(THIS.aRules,1)
-			IF EMPTY(THIS.aRules(lni,1))
-				LOOP
-			ENDIF
-			IF ALEN(THIS.aRules,2)>3
-				THIS.cWarningID = THIS.aRules(lni,4)
-			ELSE
-				THIS.cWarningID = ""
+			If This.aRules(m.lni, 2) = "O"
+				m.lcFunc = This.aRules(m.lni,3)
+				Execscript(m.lcFunc)
+			Endif
+		Endfor
+	Endproc
 
-			ENDIF
-			IF THIS.aRules(lni,2)="F"
-				lcFunc = THIS.aRules(lni,3)
-				EXECSCRIPT(lcFunc)
-			ENDIF
-		ENDFOR
+	Procedure ValidateLine
+		Lparameters tcLine
+		Local lni,lcFunc
 
-	PROCEDURE ValidateCode
-		LPARAMETERS tcCode,tcName
+		This.cLine = m.tcLine
 
-		THIS.cFuncName = tcName
-		IF EMPTY(tcName) OR tcName="Program"
-			THIS.cFuncName = THIS.cFile
-		ENDIF
-		THIS.oTherm.setstatus("Function: "+tcName)
-		LOCAL lni,lcFunc
-		THIS.cCode = tcCode
-		FOR lni = 1 TO ALEN(THIS.aRules,1)
-			IF EMPTY(THIS.aRules(lni,1))
-				LOOP
-			ENDIF
-			IF ALEN(THIS.aRules,2)>3
-				THIS.cWarningID = THIS.aRules(lni,4)
-			ELSE
-				THIS.cWarningID = ""
+		For m.lni = 1 To Alen(This.aRules, 1)
+			If Empty(This.aRules(m.lni, 1))
+		Loop
+			Endif
 
-			ENDIF
-			IF THIS.aRules(lni,2)="M"
-				lcRule = THIS.aRules(lni,1)
-				lcFunc = THIS.aRules(lni,3)
-				TRY
-					EXECSCRIPT(lcFunc)
-				CATCH TO loErr
-					THIS.AddError(loErr,lcRule,lcFunc)
-					THIS.aRules(lni,1) = ""
-				ENDTRY
-			ENDIF
-		ENDFOR
+			If Alen(This.aRules, 2) > 3
+				This.cWarningID = This.aRules(m.lni, 4)
+			Else
+				This.cWarningID = ""
 
+			Endif
 
-	PROCEDURE PreValidate
+			If This.aRules(m.lni, 2) = "L"
+				m.lcFunc = This.aRules(m.lni, 3)
+				Execscript(m.lcFunc)
+			Endif
+		Endfor
 
-		THIS.oTherm.setstatus("Pre Analysis Rules")
-		LOCAL lni,lcFunc
-		FOR lni = 1 TO ALEN(THIS.aRules,1)
-			IF EMPTY(THIS.aRules(lni,1))
-				LOOP
-			ENDIF
-			IF ALEN(THIS.aRules,2)>3
-				THIS.cWarningID = THIS.aRules(lni,4)
-			ELSE
-				THIS.cWarningID = ""
+	Procedure ValidateFile
+		Lparameters tcFile,tcName
 
-			ENDIF
-			IF THIS.aRules(lni,2)="I"
-				lcRule = THIS.aRules(lni,1)
-				lcFunc = THIS.aRules(lni,3)
-				TRY
-					EXECSCRIPT(lcFunc)
-				CATCH TO loErr
-					THIS.AddError(loErr,lcRule,lcFunc)
-					THIS.aRules(lni,1) = ""
-				ENDTRY
-			ENDIF
-		ENDFOR
+		Local lni,lcFunc
+		This.cFile = m.tcName
+		This.cCode = m.tcFile
+
+		For m.lni = 1 To Alen(This.aRules, 1)
+			If Empty(This.aRules(m.lni, 1))
+		Loop
+			Endif
+
+			If Alen(This.aRules, 2) > 3
+				This.cWarningID = This.aRules(m.lni, 4)
+
+			Else
+				This.cWarningID = ""
+			Endif
+
+			If This.aRules(m.lni, 2) = "F"
+				m.lcFunc = This.aRules(m.lni, 3)
+				Execscript(m.lcFunc)
+			Endif
+		Endfor
+
+	Procedure ValidateCode
+		Lparameters tcCode,tcName
+
+		This.cFuncName = m.tcName
+
+		If Empty(tcName) Or tcName = "Program"
+			This.cFuncName = This.cFile
+		Endif
+
+		This.oTherm.setstatus("函数/方法：" + m.tcName)
+
+		Local lni,lcFunc
+		This.cCode = m.tcCode
+
+		For m.lni = 1 To Alen(This.aRules, 1)
+			If Empty(This.aRules(m.lni, 1))
+		Loop
+			Endif
+
+			If Alen(This.aRules, 2) > 3
+				This.cWarningID = This.aRules(m.lni, 4)
+
+			Else
+				This.cWarningID = ""
+			Endif
+
+			If This.aRules(m.lni, 2) = "M"
+				m.lcRule = This.aRules(m.lni, 1)
+				m.lcFunc = This.aRules(m.lni, 3)
+
+				Try
+					Execscript(m.lcFunc)
+
+				Catch To m.loErr
+					This.AddError(m.loErr, m.lcRule, m.lcFunc)
+					This.aRules(m.lni,1) = ""
+				Endtry
+			Endif
+		Endfor
 
 
-	PROCEDURE PostValidate
+	Procedure PreValidate
 
-		THIS.oTherm.setstatus("Post Analysis Rules")
-		LOCAL lni,lcFunc
-		FOR lni = 1 TO ALEN(THIS.aRules,1)
-			IF EMPTY(THIS.aRules(lni,1))
-				LOOP
-			ENDIF
-			IF ALEN(THIS.aRules,2)>3
-				THIS.cWarningID = THIS.aRules(lni,4)
-			ELSE
-				THIS.cWarningID = ""
+		This.oTherm.setstatus("预分析规则")
+		Local lni,lcFunc
 
-			ENDIF
-			IF THIS.aRules(lni,2)="P"
-				lcRule = THIS.aRules(lni,1)
-				lcFunc = THIS.aRules(lni,3)
-				TRY
-					EXECSCRIPT(lcFunc)
-				CATCH TO loErr
-					THIS.AddError(loErr,lcRule,lcFunc)
-					THIS.aRules(lni,1) = ""
-				ENDTRY
-			ENDIF
-		ENDFOR
+		For m.lni = 1 To Alen(This.aRules, 1)
+			If Empty(This.aRules(m.lni, 1))
+		Loop
+			Endif
+
+			If Alen(This.aRules, 2) > 3
+				This.cWarningID = This.aRules(m.lni, 4)
+			Else
+				This.cWarningID = ""
+			Endif
+
+			If This.aRules(m.lni, 2) = "I"
+				m.lcRule = This.aRules(m.lni, 1)
+				m.lcFunc = This.aRules(m.lni, 3)
+
+				Try
+					Execscript(m.lcFunc)
+
+				Catch To m.loErr
+					This.AddError(m.loErr, m.lcRule, m.lcFunc)
+					This.aRules(m.lni,1) = ""
+				Endtry
+			Endif
+		Endfor
 
 
-	PROCEDURE AddError
-		LPARAMETERS toErr,tcRule,tcFunc
-		THIS.cError = THIS.cError + loErr.MESSAGE+" occurred on line "+LTRIM(STR(loErr.LINENO))+" ("+loErr.LINECONTENTS+") in rule "+tcRule + CHR(13)+CHR(10)
+	Procedure PostValidate
 
-	PROCEDURE Add2Array
-		LPARAMETERS tcCode,tnLines,taArray
+		This.oTherm.setstatus("后期分析规则")
+		Local lni,lcFunc
 
-		IF NOT EMPTY(THIS.aCode(1,1))
-			DIMENSION THIS.aCode(ALEN(THIS.aCode,1)+1,4)
-		ENDIF
+		For m.lni = 1 To Alen(This.aRules, 1)
+			If Empty(This.aRules(m.lni, 1))
+		Loop
+			Endif
 
-		THIS.cFuncName = tcCode
-		IF NOT EMPTY(THIS.cObject)
-			THIS.cFuncName = LOWER(THIS.cObject+"."+THIS.cFuncName)
-		ELSE
-			IF EMPTY(tcCode) OR tcCode="Program"
-				THIS.cFuncName = THIS.cFile
-			ENDIF
-		ENDIF
+			If Alen(This.aRules, 2) > 3
+				This.cWarningID = This.aRules(m.lni, 4)
+			Else
+				This.cWarningID = ""
+			Endif
 
-		THIS.aCode(ALEN(THIS.aCode,1),1) = THIS.cFuncName
-		THIS.aCode(ALEN(THIS.aCode,1),2) = tnLines
-		THIS.aCode(ALEN(THIS.aCode,1),4) = THIS.cClassName
-		IF EMPTY(THIS.aCode(ALEN(THIS.aCode,1),1))
-			THIS.aCode(ALEN(THIS.aCode,1),1) = ""
-		ENDIF
-		LOCAL lcCode
-		lcCode = ""
-		LOCAL lni
-		lnReal=0
-		FOR lni = 1 TO ALEN(taArray,1)
-			IF THIS.lLineRules
-				IF ALLTRIM(STRTRAN(taArray(lni),"	"))<>"*"
-					IF NOT EMPTY(taArray(lni))
-						THIS.nLine = lni
-						THIS.AddToCursor(THIS.cFile,THIS.cFuncName,THIS.cClassName,"Function")
-						THIS.ValidateLine(taArray(lni))
+			If This.aRules(m.lni,2) = "P"
+				m.lcRule = This.aRules(m.lni, 1)
+				m.lcFunc = This.aRules(m.lni, 3)
+
+				Try
+					Execscript(m.lcFunc)
+				Catch To m.loErr
+					This.AddError(m.loErr, m.lcRule, m.lcFunc)
+					This.aRules(m.lni, 1) = ""
+				Endtry
+			Endif
+		Endfor
+
+
+	Procedure AddError
+		Lparameters toErr,tcRule,tcFunc
+		This.cError = This.cError + m.loErr.Message + " occurred on line "+Ltrim(Str(m.loErr.Lineno))+" ("+m.loErr.LineContents+") in rule "+m.tcRule + Chr(13)+Chr(10)
+
+	Procedure Add2Array
+		Lparameters tcCode,tnLines,taArray
+
+		If Not Empty(This.aCode(1,1))
+			Dimension This.aCode(Alen(This.aCode, 1) + 1, 4)
+		Endif
+
+		This.cFuncName = m.tcCode
+
+		If Not Empty(This.cObject)
+			This.cFuncName = Lower(This.cObject + "." + This.cFuncName)
+		Else
+			If Empty(m.tcCode) Or m.tcCode = "Program"
+				This.cFuncName = This.cFile
+			Endif
+		Endif
+
+		This.aCode(Alen(This.aCode, 1), 1) = This.cFuncName
+		This.aCode(Alen(This.aCode, 1), 2) = m.tnLines
+		This.aCode(Alen(This.aCode, 1), 4) = This.cClassName
+
+		If Empty(This.aCode(Alen(This.aCode, 1), 1))
+			This.aCode(Alen(This.aCode, 1), 1) = ""
+		Endif
+
+		Local lcCode
+		m.lcCode = ""
+		Local lni
+		m.lnReal=0
+
+		For m.lni = 1 To Alen(m.taArray, 1)
+			If This.lLineRules
+				If Alltrim(Strtran(m.taArray(m.lni), "	")) <> "*"
+					If Not Empty(m.taArray(m.lni))
+						This.nLine = m.lni
+
+						This.AddToCursor(This.cFile, This.cFuncName, This.cClassName, "Function")
+						This.ValidateLine(m.taArray(m.lni))
 
 						lnReal = lnReal+1
-					ENDIF
-				ENDIF
-			ENDIF
-			lcCode = lcCode + taArray(lni)+CHR(13)+CHR(10)
-		ENDFOR
+					Endif
+				Endif
+			Endif
+			m.lcCode = m.lcCode + m.taArray(m.lni) + Chr(13) + Chr(10)
+		Endfor
 
-		THIS.aCode(ALEN(THIS.aCode,1),3) = lnReal
-		THIS.nFuncLines = tnLines
-		THIS.AddToCursor(THIS.cFile,THIS.cFuncName,THIS.cClassName,"Function")
-		THIS.ValidateCode(lcCode,tcCode)
-	ENDPROC
+		This.aCode(Alen(This.aCode, 1), 3) = m.lnReal
+		This.nFuncLines = m.tnLines
 
+		This.AddToCursor(This.cFile, This.cFuncName, This.cClassName, "函数")
+		This.ValidateCode(m.lcCode, m.tcCode)
+	Endproc
 ENDDEFINE
 
 DEFINE CLASS frmResults AS FORM
@@ -1221,7 +1394,7 @@ DEFINE CLASS frmResults AS FORM
 
 	DOCREATE = .T.
 	AUTOCENTER = .T.
-	CAPTION = "Refactoring Results"
+	CAPTION = "重构结果"
 	WINDOWTYPE = 1
 	WIDTH = 400
 	NAME = "Form1"
@@ -1249,7 +1422,7 @@ DEFINE CLASS frmResults AS FORM
 
 	ADD OBJECT label1 AS LABEL WITH ;
 		AUTOSIZE = .T., ;
-		CAPTION = "Object Name", ;
+		CAPTION = "对象名", ;
 		HEIGHT = 17, ;
 		LEFT = 24, ;
 		TOP = 12, ;
@@ -1259,7 +1432,7 @@ DEFINE CLASS frmResults AS FORM
 
 	ADD OBJECT label2 AS LABEL WITH ;
 		AUTOSIZE = .T., ;
-		CAPTION = "Method", ;
+		CAPTION = "方法", ;
 		HEIGHT = 17, ;
 		LEFT = 24, ;
 		TOP = 36, ;
@@ -1269,7 +1442,7 @@ DEFINE CLASS frmResults AS FORM
 
 	ADD OBJECT label3 AS LABEL WITH ;
 		AUTOSIZE = .T., ;
-		CAPTION = "# Lines", ;
+		CAPTION = "行号", ;
 		HEIGHT = 17, ;
 		LEFT = 228, ;
 		TOP = 36, ;
@@ -1279,7 +1452,7 @@ DEFINE CLASS frmResults AS FORM
 
 	ADD OBJECT label4 AS LABEL WITH ;
 		AUTOSIZE = .T., ;
-		CAPTION = "# Code", ;
+		CAPTION = "代码行", ;
 		HEIGHT = 17, ;
 		LEFT = 288, ;
 		TOP = 36, ;
@@ -1291,9 +1464,9 @@ DEFINE CLASS frmResults AS FORM
 		LPARAMETERS tcObj, taArray,tlWork
 
 		IF EMPTY(tlWork)
-			THIS.CAPTION = "Object Overview"
+			THIS.CAPTION = "对象概述"
 		ELSE
-			THIS.CAPTION = "Recommended Review Areas"
+			THIS.CAPTION = "建议审查区域"
 		ENDIF
 
 		THIS.label1.CAPTION = tcObj
@@ -1304,7 +1477,7 @@ DEFINE CLASS frmResults AS FORM
 			WITH THIS.list1
 				IF NOT EMPTY(_SCREEN._Analyst.aWarnings(lni,1))
 					IF NOT llTitle
-						.ADDITEM("*** Warnings ***")
+						.ADDITEM("*** 警告 ***")
 						llTitle = .T.
 					ENDIF
 					.ADDITEM(_SCREEN._Analyst.aWarnings(lni,1))

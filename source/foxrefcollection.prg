@@ -1,8 +1,6 @@
-* Abstract:
-* 	Collection Class.  
-*	This could be replaced with a subclass of
-*	the VFP8 collection class, which wasn't
-*	available when Code References work began.
+* 摘要：
+* 集合类。
+* 可以用 VFP8 集合类的子类代替，该类在 Code References 工作开始时不可用。
 * 	
 DEFINE CLASS CFoxRefCollection AS Custom
 	DIMENSION aCollection[1, 2]
@@ -23,7 +21,7 @@ DEFINE CLASS CFoxRefCollection AS Custom
 	ENDFUNC
 	
 	FUNCTION Remove(nIndex)
-		IF m.nIndex == -1  && remove all
+		IF m.nIndex == -1  && 移除所有
 			DIMENSION THIS.aCollection[1, 2]
 			THIS.Count = 0
 			RETURN .T.
@@ -63,21 +61,21 @@ DEFINE CLASS CFoxRefCollection AS Custom
 		RETURN .NULL.
 	ENDFUNC
 
-	* given an index, return the key
-	* or given a Key, return the index
+	* 给定一个索引，返回 KEY
+	* 或者，给定一个 KEY，返回索引
 	FUNCTION GetKey(xIndex)
 		LOCAL nCnt
 		LOCAL i
 
 		DO CASE
-		CASE VARTYPE(m.xIndex) == 'N'  && look for index, return key
+		CASE VARTYPE(m.xIndex) == 'N'  && 查找索引，返回 KEY
 			IF BETWEEN(m.xIndex, 1, THIS.Count)
 				RETURN THIS.aCollection[m.xIndex, 2]
 			ELSE
 				RETURN ''
 			ENDIF
 
-		CASE VARTYPE(m.xIndex) == 'C'  && look for key, return index
+		CASE VARTYPE(m.xIndex) == 'C'  && 查找 KEY，返回索引
 			m.nCnt = THIS.Count
 			FOR m.i = 1 TO m.nCnt
 				IF THIS.aCollection[m.i, 2] == m.xIndex
@@ -120,12 +118,12 @@ DEFINE CLASS CFoxRefCollection AS Custom
 		ENDIF
 	ENDFUNC
 
-	* clear collection
+	* 清理集合
 	FUNCTION Clear()
 		RETURN THIS.Remove(-1)
 	ENDFUNC
 
-	* add a delimited list to the collection	
+	* 在集合中添加分割列表	
 	FUNCTION AddList(cList, cParseChar)
 		LOCAL nCnt
 		LOCAL i
@@ -144,7 +142,7 @@ DEFINE CLASS CFoxRefCollection AS Custom
 		RETURN m.nCnt		
 	ENDFUNC
 	
-	* given a value, return the index position within the collection
+	* 给定一个值，返回集合中的索引
 	FUNCTION GetIndex(xValue)
 		LOCAL nCnt
 		LOCAL i
